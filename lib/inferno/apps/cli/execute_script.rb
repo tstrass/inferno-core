@@ -747,12 +747,32 @@ module Inferno
         end
         start_run['inputs']&.each_key do |input_name|
           raw = start_run['inputs'][input_name]
-          raw = raw.to_json if raw.is_a?(Array) || raw.is_a?(Hash)
-          value = apply_templates(raw.to_s, status, session_key)
+          value =
+            if raw.is_a?(Array) || raw.is_a?(Hash)
+              apply_templates_to_value(raw, status, session_key).to_json
+            else
+              apply_templates(raw.to_s, status, session_key)
+            end
           start_run['inputs'][input_name] = expand_file_input_path(value)
         end
 
         start_run
+      end
+
+      def apply_templates_to_value(value, status, session_key)
+        case value
+        when Hash
+          value.to_h do |key, item|
+            resolved_key = key.is_a?(String) ? apply_templates(key, status, session_key) : key
+            [resolved_key, apply_templates_to_value(item, status, session_key)]
+          end
+        when Array
+          value.map { |item| apply_templates_to_value(item, status, session_key) }
+        when String
+          apply_templates(value, status, session_key)
+        else
+          value
+        end
       end
 
       def expand_file_input_path(value)

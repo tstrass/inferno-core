@@ -294,6 +294,29 @@ RSpec.describe Inferno::CLI::ExecuteScript do
       result = instance.send(:apply_templates_to_start_run, start_run, status, session_key)
       expect(result['inputs']['list_input']).to eq(array_value.to_json)
     end
+
+    it 'substitutes a named wait output before serializing a structured auth_info input' do
+      token = 'TOKEN"\\value'
+      instance.execution_status.cross_session_status['client'] =
+        { 'wait_outputs' => [{ 'name' => 'access_token', 'value' => token }] }
+      auth_info = { 'auth_type' => 'public', 'access_token' => '{client.wait_outputs.access_token}' }
+      start_run = { 'runnable' => 'suite', 'inputs' => { 'smart_auth_info' => auth_info } }
+
+      result = instance.send(:apply_templates_to_start_run, start_run, status, session_key)
+
+      expect(JSON.parse(result['inputs']['smart_auth_info']))
+        .to eq('auth_type' => 'public', 'access_token' => token)
+    end
+
+    it 'substitutes templates in structured input keys and nested array values' do
+      payload = { 'session_{session_id}' => [{ 'url' => '{inferno_base_url}' }] }
+      start_run = { 'runnable' => 'suite', 'inputs' => { 'payload' => payload } }
+
+      result = instance.send(:apply_templates_to_start_run, start_run, status, session_key)
+
+      expect(JSON.parse(result['inputs']['payload']))
+        .to eq("session_#{session_id}" => [{ 'url' => inferno_host }])
+    end
   end
 
   describe '#compare_session' do
